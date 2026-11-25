@@ -23,7 +23,54 @@ HOST = os.getenv("ANALYTICS_HOST")
 PORT = int(os.getenv("ANALYTICS_PORT"))
 LIMA_TZ = ZoneInfo("America/Lima")
 
+ALLOWED_ORIGINS = {
+    "https://tca-msr2.onrender.com",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+}
+
 app = Flask(__name__)
+
+
+def _origen_permitido(origen: str | None) -> str | None:
+    if not origen:
+        return None
+    limpio = origen.strip().rstrip("/")
+    if limpio in ALLOWED_ORIGINS:
+        return limpio
+    if limpio.startswith("http://localhost:") or limpio.startswith("http://127.0.0.1:"):
+        return limpio
+    return None
+
+
+@app.before_request
+def manejar_preflight():
+    if request.method == "OPTIONS":
+        permitido = _origen_permitido(request.headers.get("Origin"))
+        resp = app.make_response(("", 204))
+        if permitido:
+            resp.headers["Access-Control-Allow-Origin"] = permitido
+            resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+            resp.headers["Vary"] = "Origin"
+        return resp
+
+
+@app.after_request
+def agregar_headers_cors(response):
+    permitido = _origen_permitido(request.headers.get("Origin"))
+    if permitido:
+        response.headers["Access-Control-Allow-Origin"] = permitido
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
 
 
 def _seguro_float(val, default: float = 0.0) -> float:
